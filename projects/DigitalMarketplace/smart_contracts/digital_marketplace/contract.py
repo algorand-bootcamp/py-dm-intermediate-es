@@ -1,7 +1,5 @@
 from algopy import ARC4Contract, Asset, Global, Txn, UInt64, arc4, gtxn, itxn, op
 
-BOX_MBR = UInt64(2_500 + 400 * 56)
-
 
 class DigitalMarketplace(ARC4Contract):
 
@@ -38,7 +36,7 @@ class DigitalMarketplace(ARC4Contract):
 
         assert mbr_pay.sender == Txn.sender
         assert mbr_pay.receiver == Global.current_application_address
-        assert mbr_pay.amount == BOX_MBR
+        assert mbr_pay.amount == UInt64(2_500 + 400 * 56)
 
         box_key = Txn.sender.bytes + op.itob(xfer.xfer_asset.id)
         _length, exists = op.Box.length(box_key)
@@ -96,10 +94,32 @@ class DigitalMarketplace(ARC4Contract):
 
         itxn.Payment(
             receiver=Txn.sender,
-            amount=BOX_MBR,
+            amount=UInt64(2_500 + 400 * 56),
             fee=0,
         ).submit()
 
     # Funcion de compra de assets
+    @arc4.abimethod
+    def buy(
+        self,
+        owner: arc4.Address,
+        asset: Asset,
+        buy_pay: gtxn.PaymentTransaction,
+        amount: UInt64,
+    ) -> None:
+        box_key = owner.bytes + op.itob(asset.id)
+        unitary_price = op.btoi(op.Box.extract(box_key, 8, 8))
 
-    # Subastas
+        assert buy_pay.receiver == Global.current_application_address
+        assert buy_pay.sender == Txn.sender
+        assert buy_pay.amount == unitary_price * amount
+
+        current_deposited = op.btoi(op.Box.extract(box_key, 0, 8))
+        op.Box.replace(box_key, 0, op.itob(current_deposited - amount))
+
+        itxn.AssetTransfer(
+            xfer_asset=asset,
+            asset_receiver=Txn.sender,
+            asset_amount=amount,
+            fee=0,
+        ).submit()
